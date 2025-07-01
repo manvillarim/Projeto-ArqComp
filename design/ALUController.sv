@@ -2,7 +2,7 @@
 
 module ALUController (
     //Inputs
-    input logic [1:0] ALUOp,  // 2-bit opcode field from the Controller--00: LW/SW/AUIPC; 01:Branch; 10: Rtype/Itype; 11:JAL/LUI
+    input logic [1:0] ALUOp,  // 2-bit opcode field from the Controller--00: LW/SW; 01:Branch; 10: Rtype/Itype
     input logic [6:0] Funct7,  // bits 25 to 31 of the instruction
     input logic [2:0] Funct3,  // bits 12 to 14 of the instruction
 
@@ -10,19 +10,44 @@ module ALUController (
     output logic [3:0] Operation  // operation selection for ALU
 );
 
-  assign Operation[0] = ((ALUOp == 2'b10) && (Funct3 == 3'b110)) ||  // R\I-or
-      ((ALUOp == 2'b10) && (Funct3 == 3'b101) && (Funct7 == 7'b0000000)) ||  // R\I->>
-      ((ALUOp == 2'b10) && (Funct3 == 3'b101) && (Funct7 == 7'b0100000));  // R\I->>>
+  always_comb begin
+    case (ALUOp)
+      2'b00: Operation = 4'b0010;  // LW/SW: ADD
+      
+      2'b01: Operation = 4'b1000;  // Branch: Equal comparison
+      
+      2'b10: begin  // R-type and I-type operations
+        case (Funct3)
+          3'b000: begin  // ADD/ADDI or SUB
+            if (Funct7[5] && ALUOp == 2'b10)  // SUB (only for R-type)
+              Operation = 4'b0110;  // SUB
+            else
+              Operation = 4'b0010;  // ADD/ADDI
+          end
+          
+          3'b001: Operation = 4'b0011;  // SLL/SLLI (Shift Left Logical)
+          
+          3'b010: Operation = 4'b1100;  // SLT/SLTI (Set Less Than)
+          
+          3'b100: Operation = 4'b0100;  // XOR/XORI
+          
+          3'b101: begin  // SRL/SRLI or SRA/SRAI
+            if (Funct7[5])
+              Operation = 4'b1010;  // SRA/SRAI (Shift Right Arithmetic)
+            else
+              Operation = 4'b0101;  // SRL/SRLI (Shift Right Logical)
+          end
+          
+          3'b110: Operation = 4'b0001;  // OR/ORI
+          
+          3'b111: Operation = 4'b0000;  // AND/ANDI
+          
+          default: Operation = 4'b0000;
+        endcase
+      end
+      
+      default: Operation = 4'b0000;
+    endcase
+  end
 
-  assign Operation[1] = (ALUOp == 2'b00) ||  // LW\SW
-      ((ALUOp == 2'b10) && (Funct3 == 3'b000)) ||  // R\I-add
-      ((ALUOp == 2'b10) && (Funct3 == 3'b101) && (Funct7 == 7'b0100000));  // R\I->>>
-
-  assign Operation[2] =  ((ALUOp==2'b10) && (Funct3==3'b101) && (Funct7==7'b0000000)) || // R\I->>
-      ((ALUOp == 2'b10) && (Funct3 == 3'b101) && (Funct7 == 7'b0100000)) ||  // R\I->>>
-      ((ALUOp == 2'b10) && (Funct3 == 3'b001)) ||  // R\I-<<
-      ((ALUOp == 2'b10) && (Funct3 == 3'b010));  // R\I-<
-
-  assign Operation[3] = (ALUOp == 2'b01) ||  // BEQ
-      ((ALUOp == 2'b10) && (Funct3 == 3'b010));  // R\I-<
 endmodule

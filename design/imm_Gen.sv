@@ -5,10 +5,12 @@ module imm_Gen (
     output logic [31:0] Imm_out
 );
 
-
   always_comb
     case (inst_code[6:0])
       7'b0000011:  /*I-type load part*/
+      Imm_out = {inst_code[31] ? 20'hFFFFF : 20'b0, inst_code[31:20]};
+
+      7'b0010011:  /*I-type arithmetic/logic operations*/
       Imm_out = {inst_code[31] ? 20'hFFFFF : 20'b0, inst_code[31:20]};
 
       7'b0100011:  /*S-type*/
