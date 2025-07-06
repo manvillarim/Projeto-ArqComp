@@ -14,12 +14,20 @@ module ALUController (
     case (ALUOp)
       2'b00: Operation = 4'b0010;  // LW/SW: ADD
       
-      2'b01: Operation = 4'b1000;  // Branch: Equal comparison
+      2'b01: begin  // Branch operations
+        case(Funct3) 
+          3'b000: Operation = 4'b1000;  // BEQ: Equal comparison
+          3'b001: Operation = 4'b1001;  // BNE: Not Equal comparison
+          3'b100: Operation = 4'b1100;  // BLT: Less Than (signed)
+          3'b101: Operation = 4'b1101;  // BGE: Greater Equal (signed)
+          default: Operation = 4'b1000; // Default to BEQ
+        endcase
+      end
       
       2'b10: begin  // R-type and I-type operations
         case (Funct3)
           3'b000: begin  // ADD/ADDI or SUB
-            if (Funct7[5] && ALUOp == 2'b10)  // SUB (only for R-type)
+            if (Funct7[5])  // SUB has funct7[5] = 1
               Operation = 4'b0110;  // SUB
             else
               Operation = 4'b0010;  // ADD/ADDI
@@ -29,7 +37,7 @@ module ALUController (
           
           3'b010: Operation = 4'b1100;  // SLT/SLTI (Set Less Than)
           
-          3'b100: Operation = 4'b0100;  // XOR/XORI
+          3'b100: Operation = 4'b0100;  // XOR
           
           3'b101: begin  // SRL/SRLI or SRA/SRAI
             if (Funct7[5])
@@ -38,9 +46,9 @@ module ALUController (
               Operation = 4'b0101;  // SRL/SRLI (Shift Right Logical)
           end
           
-          3'b110: Operation = 4'b0001;  // OR/ORI
+          3'b110: Operation = 4'b0001;  // OR
           
-          3'b111: Operation = 4'b0000;  // AND/ANDI
+          3'b111: Operation = 4'b0000;  // AND
           
           default: Operation = 4'b0000;
         endcase

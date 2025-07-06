@@ -7,9 +7,8 @@ module alu#(
         (
         input logic [DATA_WIDTH-1:0]    SrcA,
         input logic [DATA_WIDTH-1:0]    SrcB,
-
-        input logic [OPCODE_LENGTH-1:0]    Operation,
-        output logic[DATA_WIDTH-1:0] ALUResult
+        input logic [OPCODE_LENGTH-1:0] Operation,
+        output logic[DATA_WIDTH-1:0]    ALUResult
         );
     
         always_comb
@@ -39,11 +38,17 @@ module alu#(
             4'b1000:        // Equal (for BEQ)
                     ALUResult = (SrcA == SrcB) ? 1 : 0;
                     
+            4'b1001:        // Not Equal(for BNE)
+                    ALUResult = (SrcA != SrcB) ? 1 : 0;
+                    
             4'b1010:        // SRA (Shift Right Arithmetic)
                     ALUResult = $signed(SrcA) >>> SrcB[4:0];  // Arithmetic right shift
                     
-            4'b1100:        // SLT (Set Less Than)
+            4'b1100:        // SLT (Set Less Than) - SIGNED
                     ALUResult = ($signed(SrcA) < $signed(SrcB)) ? 1 : 0;
+                    
+            4'b1101:        // BGE (Branch Greater Equal) - SIGNED
+                    ALUResult = ($signed(SrcA) >= $signed(SrcB)) ? 1 : 0;
                     
             default:
                     ALUResult = 0;
