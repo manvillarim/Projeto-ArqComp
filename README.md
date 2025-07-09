@@ -7,7 +7,7 @@ Este repositório contém os arquivos base para o projeto da disciplina Infraest
 
 Manoel Felipe Araújo Villarim - mfav
 
-Henrique Mendes Bezera Xavier - hmbx
+Henrique Mendes Bezerra Xavier - hmbx
 
 José Francisco Cruz Neto - jfcn
 
