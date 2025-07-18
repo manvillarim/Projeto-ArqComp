@@ -14,7 +14,14 @@ module ALUController (
     case (ALUOp)
       2'b00: Operation = 4'b0010;  // LW/SW: ADD
       
-      2'b01: Operation = 4'b1000;  // Branch: Equal comparison
+      2'b01: begin  // Branch operations
+      case (Funct3)
+        3'b000: Operation = 4'b1000;  // BEQ (Equal)
+        3'b001: Operation = 4'b1001;  // BNE (Not Equal)
+        3'b100: Operation = 4'b1100;  // BLT (Less Than)
+        3'b101: Operation = 4'b1101;  // BGE (Greater Equal)
+      endcase
+      end
       
       2'b10: begin  // R-type and I-type operations
         case (Funct3)

@@ -5,7 +5,7 @@ module imm_Gen (
 
   always_comb
     case (inst_code[6:0])
-      7'b0000011:  /*I-type load*/
+      7'b0000011:  /*I-type load (LW, LH, LB, LBU, LHU)*/
         Imm_out = {{20{inst_code[31]}}, inst_code[31:20]};
 
       7'b0010011: begin /*I-type arithmetic/logic operations*/
@@ -19,7 +19,7 @@ module imm_Gen (
         endcase
       end
 
-      7'b0100011:  /*S-type*/
+      7'b0100011:  /*S-type (SW, SH, SB)*/
         Imm_out = {{20{inst_code[31]}}, inst_code[31:25], inst_code[11:7]};
 
       7'b1100011:  /*B-type*/

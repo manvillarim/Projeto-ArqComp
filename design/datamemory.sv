@@ -33,15 +33,76 @@ module datamemory #(
     waddress = {{22{1'b0}}, {a[8:2], {2{1'b0}}}};
     Datain = wd;
     Wr = 4'b0000;
-
+    
     if (MemRead) begin
       case (Funct3)
-        3'b010:  //LW
-        rd <= Dataout;
+        3'b010: begin  //LW
+          rd <= Dataout;
+        end
+        3'b000: begin  //LB
+          case (a[1:0])
+            2'b00: rd <= {{24{Dataout[7]}}, Dataout[7:0]};
+            2'b01: rd <= {{24{Dataout[15]}}, Dataout[15:8]};
+            2'b10: rd <= {{24{Dataout[23]}}, Dataout[23:16]};
+            2'b11: rd <= {{24{Dataout[31]}}, Dataout[31:24]};
+          endcase
+        end
+        3'b001: begin  //LH
+          case (a[1])
+            1'b0: rd <= {{16{Dataout[15]}}, Dataout[15:0]};
+            1'b1: rd <= {{16{Dataout[31]}}, Dataout[31:16]};
+          endcase
+        end
+        3'b100: begin  //LBU
+          case (a[1:0])
+            2'b00: rd <= {24'b0, Dataout[7:0]};
+            2'b01: rd <= {24'b0, Dataout[15:8]};
+            2'b10: rd <= {24'b0, Dataout[23:16]};
+            2'b11: rd <= {24'b0, Dataout[31:24]};
+          endcase
+        end
+        3'b101: begin  //LHU
+          case (a[1])
+            1'b0: rd <= {16'b0, Dataout[15:0]};
+            1'b1: rd <= {16'b0, Dataout[31:16]};
+          endcase
+        end
         default: rd <= Dataout;
       endcase
     end else if (MemWrite) begin
       case (Funct3)
+        3'b001: begin  //SH
+          case (a[1])
+            1'b0: begin
+              Wr <= 4'b0011;
+              Datain[15:0] <= wd[15:0];
+            end
+            1'b1: begin
+              Wr <= 4'b1100;
+              Datain[31:16] <= wd[15:0];
+            end
+          endcase
+        end
+        3'b000: begin  //SB
+          case (a[1:0])
+            2'b00: begin
+              Wr <= 4'b0001;
+              Datain[7:0] <= wd[7:0];
+            end
+            2'b01: begin
+              Wr <= 4'b0010;
+              Datain[15:8] <= wd[7:0];
+            end
+            2'b10: begin
+              Wr <= 4'b0100;
+              Datain[23:16] <= wd[7:0];
+            end
+            2'b11: begin
+              Wr <= 4'b1000;
+              Datain[31:24] <= wd[7:0];
+            end
+          endcase
+        end
         3'b010: begin  //SW
           Wr <= 4'b1111;
           Datain <= wd;
