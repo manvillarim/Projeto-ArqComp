@@ -26,10 +26,10 @@ module ALUController (
       2'b10: begin  // R-type and I-type operations
         case (Funct3)
           3'b000: begin  // ADD/ADDI or SUB
-            if (Funct7 == 7'b0100000)  // SUB R-type específico
+            if (Funct7 == 7'b0100000) 
               Operation = 4'b0110;  // SUB
             else
-              Operation = 4'b0010;  // ADD/ADDI (padrão para I-type)
+              Operation = 4'b0010;  // ADD/ADDI 
           end
           
           3'b001: Operation = 4'b0011;  // SLL/SLLI (Shift Left Logical)
@@ -39,11 +39,11 @@ module ALUController (
           3'b100: Operation = 4'b0100;  // XOR/XORI
           
           3'b101: begin  // SRL/SRLI or SRA/SRAI
-            // Correção similar para shifts
-            if (Funct7 == 7'b0100000)  // SRA R-type específico
+
+            if (Funct7 == 7'b0100000)  // SRA R-type
               Operation = 4'b1010;  // SRA
             else
-              Operation = 4'b0101;  // SRL/SRLI (padrão)
+              Operation = 4'b0101;  // SRL/SRLI
           end
           
           3'b110: Operation = 4'b0001;  // OR/ORI

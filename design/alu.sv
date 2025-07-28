@@ -24,13 +24,13 @@ module alu#(
                     ALUResult = SrcA + SrcB;
                     
             4'b0011:        // SLL (Shift Left Logical)
-                    ALUResult = SrcA << SrcB[4:0];  // Only use lower 5 bits for shift amount
+                    ALUResult = SrcA << SrcB[4:0]; 
                     
             4'b0100:        // XOR
                     ALUResult = SrcA ^ SrcB;
                     
             4'b0101:        // SRL (Shift Right Logical)
-                    ALUResult = SrcA >> SrcB[4:0];  // Only use lower 5 bits for shift amount
+                    ALUResult = SrcA >> SrcB[4:0]; 
                     
             4'b0110:        // SUB
                     ALUResult = SrcA - SrcB;
@@ -42,7 +42,7 @@ module alu#(
                     ALUResult = (SrcA != SrcB) ? 1 : 0;
                     
             4'b1010:        // SRA (Shift Right Arithmetic)
-                    ALUResult = $signed(SrcA) >>> SrcB[4:0];  // Arithmetic right shift
+                    ALUResult = $signed(SrcA) >>> SrcB[4:0];  
                     
             4'b1100:        // SLT (Set Less Than) - SIGNED
                     ALUResult = ($signed(SrcA) < $signed(SrcB)) ? 1 : 0;

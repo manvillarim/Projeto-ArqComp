@@ -18,6 +18,9 @@ module Datapath #(
     MemWrite,  // Register file or Immediate MUX // Memroy Writing Enable
     MemRead,  // Memroy Reading Enable
     Branch,  // Branch Enable
+    Jump,    // Jump Enable
+    Halt,    // Halt Enable - NOVO
+    input  logic [          1:0] JumpType,  // Jump Type
     input  logic [          1:0] ALUOp,
     input  logic [ALU_CC_W -1:0] ALU_CC,         // ALU Control Code ( input of the ALU )
     output logic [          6:0] opcode,
@@ -25,6 +28,7 @@ module Datapath #(
     output logic [          2:0] Funct3,
     output logic [          1:0] ALUOp_Current,
     output logic [   DATA_W-1:0] WB_Data,        //Result After the last MUX
+    output logic                 Halted,         // Status de HALT - NOVO
 
     // Para depuração no tesbench:
     output logic [4:0] reg_num,  //número do registrador que foi escrito
@@ -44,6 +48,7 @@ module Datapath #(
   logic [DATA_W-1:0] ReadData;
   logic [DATA_W-1:0] SrcB, ALUResult;
   logic [DATA_W-1:0] ExtImm, BrImm, Old_PC_Four, BrPC;
+  logic [DATA_W-1:0] PC_Plus4_Save;  // PC+4 para salvar no registrador
   logic [DATA_W-1:0] WrmuxSrc;
   logic PcSel;  // mux select / flush signal
   logic [1:0] FAmuxSel;
@@ -51,11 +56,31 @@ module Datapath #(
   logic [DATA_W-1:0] FAmux_Result;
   logic [DATA_W-1:0] FBmux_Result;
   logic Reg_Stall;  //1: PC fetch same, Register not update
+  logic [1:0] WBSel;  // Seletor do MUX de writeback expandido
+  logic PC_Enable;    // Controle de habilitação do PC
+  logic Halt_State;   // Estado interno de HALT
+  logic Halt_Flush;   // Sinal para flush quando HALT detectado
+  logic Any_Halt_in_Pipeline; // HALT detectado em qualquer estágio
 
   if_id_reg A;
   id_ex_reg B;
   ex_mem_reg C;
   mem_wb_reg D;
+
+
+  assign Any_Halt_in_Pipeline = D.Halt; 
+
+
+  always_ff @(posedge clk, posedge reset) begin
+    if (reset)
+      Halt_State <= 1'b0;
+    else if (Any_Halt_in_Pipeline) 
+      Halt_State <= 1'b1;
+  end
+
+  assign Halted = Halt_State;
+  assign PC_Enable = ~Halt_State && ~Halt;  // PC para se HALT está ativo ou sendo decodificado
+  assign Halt_Flush = Halt && !B.Halt && !C.Halt && !D.Halt;  // Flush apenas para novas instruções após HALT
 
   // next PC
   adder #(9) pcadd (
@@ -73,7 +98,7 @@ module Datapath #(
       clk,
       reset,
       Next_PC,
-      Reg_Stall,
+      (Reg_Stall || ~PC_Enable),  // Stall se HALT ativo
       PC
   );
   instructionmemory instr_mem (
@@ -82,14 +107,14 @@ module Datapath #(
       Instr
   );
 
-  // IF_ID_Reg A;
+  // IF_ID_Reg A
   always @(posedge clk) begin
-    if ((reset) || (PcSel))   // initialization or flush
+    if ((reset) || (PcSel) || (Halt_Flush))   // flush com HALT apenas para novas instruções
         begin
       A.Curr_Pc <= 0;
       A.Curr_Instr <= 0;
     end
-        else if (!Reg_Stall)    // stall
+        else if (!Reg_Stall && PC_Enable)    // stall ou halt
         begin
       A.Curr_Pc <= PC;
       A.Curr_Instr <= Instr;
@@ -111,7 +136,7 @@ module Datapath #(
   RegFile rf (
       clk,
       reset,
-      D.RegWrite,
+      D.RegWrite && ~Halt_State,  // Não escreve se HALT ativo
       D.rd,
       A.Curr_Instr[19:15],
       A.Curr_Instr[24:20],
@@ -122,7 +147,7 @@ module Datapath #(
 
   assign reg_num = D.rd;
   assign reg_data = WrmuxSrc;
-  assign reg_write_sig = D.RegWrite;
+  assign reg_write_sig = D.RegWrite && ~Halt_State;
 
   // //sign extend
   imm_Gen Ext_Imm (
@@ -130,9 +155,9 @@ module Datapath #(
       ExtImm
   );
 
-  // ID_EX_Reg B;
+  // ID_EX_Reg B
   always @(posedge clk) begin
-    if ((reset) || (Reg_Stall) || (PcSel))   // initialization or flush or generate a NOP if hazard
+    if ((reset) || (Reg_Stall) || (PcSel))  
         begin
       B.ALUSrc <= 0;
       B.MemtoReg <= 0;
@@ -141,6 +166,9 @@ module Datapath #(
       B.MemWrite <= 0;
       B.ALUOp <= 0;
       B.Branch <= 0;
+      B.Jump <= 0;
+      B.JumpType <= 0;
+      B.Halt <= 0;
       B.Curr_Pc <= 0;
       B.RD_One <= 0;
       B.RD_Two <= 0;
@@ -151,7 +179,7 @@ module Datapath #(
       B.func3 <= 0;
       B.func7 <= 0;
       B.Curr_Instr <= A.Curr_Instr;  //debug tmp
-    end else begin
+    end else begin  // Continua executando até HALT chegar em WB
       B.ALUSrc <= ALUsrc;
       B.MemtoReg <= MemtoReg;
       B.RegWrite <= RegWrite;
@@ -159,6 +187,9 @@ module Datapath #(
       B.MemWrite <= MemWrite;
       B.ALUOp <= ALUOp;
       B.Branch <= Branch;
+      B.Jump <= Jump;
+      B.JumpType <= JumpType;
+      B.Halt <= Halt;
       B.Curr_Pc <= A.Curr_Pc;
       B.RD_One <= Reg1;
       B.RD_Two <= Reg2;
@@ -217,40 +248,53 @@ module Datapath #(
       ALU_CC,
       ALUResult
   );
-  BranchUnit #(9) brunit (
+  
+  JumpBranchUnit #(9) jumpbrunit (
       B.Curr_Pc,
       B.ImmG,
-      B.Branch,
+      FAmux_Result,   
+      B.Branch,       
+      B.Jump,       
+      B.JumpType,
       ALUResult,
       BrImm,
       Old_PC_Four,
       BrPC,
+      PC_Plus4_Save,   
       PcSel
   );
 
-  // EX_MEM_Reg C;
+  // EX_MEM_Reg C
   always @(posedge clk) begin
-    if (reset)   // initialization
+    if (reset)   
         begin
       C.RegWrite <= 0;
       C.MemtoReg <= 0;
       C.MemRead <= 0;
       C.MemWrite <= 0;
+      C.Jump <= 0;
+      C.JumpType <= 0;
+      C.Halt <= 0;
       C.Pc_Imm <= 0;
       C.Pc_Four <= 0;
+      C.PC_Plus4 <= 0;
       C.Imm_Out <= 0;
       C.Alu_Result <= 0;
       C.RD_Two <= 0;
       C.rd <= 0;
       C.func3 <= 0;
       C.func7 <= 0;
-    end else begin
+    end else begin  // Continua executando até HALT chegar em WB
       C.RegWrite <= B.RegWrite;
       C.MemtoReg <= B.MemtoReg;
       C.MemRead <= B.MemRead;
       C.MemWrite <= B.MemWrite;
+      C.Jump <= B.Jump;
+      C.JumpType <= B.JumpType;
+      C.Halt <= B.Halt;
       C.Pc_Imm <= BrImm;
       C.Pc_Four <= Old_PC_Four;
+      C.PC_Plus4 <= PC_Plus4_Save;
       C.Imm_Out <= B.ImmG;
       C.Alu_Result <= ALUResult;
       C.RD_Two <= FBmux_Result;
@@ -264,37 +308,45 @@ module Datapath #(
   // // // // Data memory 
   datamemory data_mem (
       clk,
-      C.MemRead,
-      C.MemWrite,
+      C.MemRead && ~Halt_State,  // desabilita leitura se HALT ativo
+      C.MemWrite && ~Halt_State, // desabilita escrita se HALT ativo
       C.Alu_Result[8:0],
       C.RD_Two,
       C.func3,
       ReadData
   );
 
-  assign wr = C.MemWrite;
-  assign reade = C.MemRead;
+  assign wr = C.MemWrite && ~Halt_State;
+  assign reade = C.MemRead && ~Halt_State;
   assign addr = C.Alu_Result[8:0];
   assign wr_data = C.RD_Two;
   assign rd_data = ReadData;
 
-  // MEM_WB_Reg D;
+  // MEM_WB_Reg D
   always @(posedge clk) begin
-    if (reset)   // initialization
+    if (reset)  
         begin
       D.RegWrite <= 0;
       D.MemtoReg <= 0;
+      D.Jump <= 0;
+      D.JumpType <= 0;
+      D.Halt <= 0;
       D.Pc_Imm <= 0;
       D.Pc_Four <= 0;
+      D.PC_Plus4 <= 0;
       D.Imm_Out <= 0;
       D.Alu_Result <= 0;
       D.MemReadData <= 0;
       D.rd <= 0;
-    end else begin
+    end else begin  // Continua executando até HALT chegar em WB
       D.RegWrite <= C.RegWrite;
       D.MemtoReg <= C.MemtoReg;
+      D.Jump <= C.Jump;
+      D.JumpType <= C.JumpType;
+      D.Halt <= C.Halt;
       D.Pc_Imm <= C.Pc_Imm;
       D.Pc_Four <= C.Pc_Four;
+      D.PC_Plus4 <= C.PC_Plus4;
       D.Imm_Out <= C.Imm_Out;
       D.Alu_Result <= C.Alu_Result;
       D.MemReadData <= ReadData;
@@ -304,10 +356,16 @@ module Datapath #(
   end
 
   //--// The LAST Block
-  mux2 #(32) resmux (
-      D.Alu_Result,
-      D.MemReadData,
-      D.MemtoReg,
+  // WBSel = 00: ALU result, 01: Memory data, 10: PC+4
+  assign WBSel = (D.Jump) ? 2'b10 : 
+                 (D.MemtoReg) ? 2'b01 : 2'b00;
+
+  mux4 #(32) resmux (
+      D.Alu_Result,     // 00: ALU result
+      D.MemReadData,    // 01: Memory data  
+      D.PC_Plus4,       // 10: PC+4 para JAL/JALR
+      32'b0,            // 11: unused
+      WBSel,
       WrmuxSrc
   );
 
